@@ -14,6 +14,7 @@ import User from './Schema/User.js';
 import Blog from './Schema/Blog.js';
 import Notification from './Schema/Notification.js';
 import Comment from './Schema/Comment.js';
+import { populate } from 'dotenv';
 
 const app = express();
 let PORT = 3000;
@@ -214,6 +215,100 @@ app.post("/google-auth", async (req, res) =>{
     }).catch(err=>{
         return res.status(500).json({"error": "failed to authenticate you with google. try again with othe google account"});
 })
+
+})
+
+
+app.post("/change-password",verifyJWT, (req, res)=>{
+
+    let {currentPassword, newPassword} = req.body;
+
+    if(!passwordRegex.test(currentPassword)||!passwordRegex.test(newPassword)){
+        return res.status(403).json({error:"Password must be at least 6 characters long, contain at least one uppercase letter, one lowercase letter and one number"})
+    }
+
+    User.findOne({_id: req.user})
+    .then((user)=>{
+
+        if(user.google_auth){
+            return res.status(403).json({error: "Account was created using google. Please log in with password to change password."});
+        }
+
+        bcrypt.compare(currentPassword, user.personal_info.password,(err, result)=>{
+            if(err){
+                return res.status(500).json({error:"Error while changing password please try again"})
+            }
+            if(!result){
+                return res.status(403).json({error:"Invalid current password"})
+            }
+            bcrypt.hash(newPassword, 10 , (err, hashed_password)=>{
+                User.findOneAndUpdate({_id: req.user},{ "personal_info.password": hashed_password})
+                .then((u)=>{
+                    return res.status(200).json({status: "Password changed successfully"})
+                })
+                .catch((err)=>{
+                    return res.status(500).json({error: "error occured while saving the password please try again"});
+                })
+            })
+        })
+    })
+    .catch(err=>{
+        console.log(err);
+        return res.status(500).json({err: "User not found"});
+    })
+
+})
+app.post("/update-profile-img",verifyJWT,(req, res)=>{
+
+    let {url} = req.body;
+    User.findOneAndUpdate({_id: req.user},{ "personal_info.profile_img": url})
+    .then(()=>{
+        return res.status(200).json({profile_img: url})
+    })
+    .catch((err)=>{
+        return res.status(500).json({error: err.message});
+    })
+})
+
+app.post("/update-profile",verifyJWT,(req, res)=>{
+    let {username,bio,social_links} = req.body;
+    let bioLimit = 150;
+
+    if(username.length<3){
+        return res.status(403).json({error: "Username must be at least 3 characters long"});
+    }
+    if(bio.length > bioLimit){
+        return res.status(403).json({error: `Bio must be under ${bioLimit} character`});
+    }
+    let social_LinksArr = Object.keys(social_links);
+    try {
+        for(let i=0; i<social_LinksArr.length; i++){
+            if(social_links[social_LinksArr[i]].length){
+                let hostname = new URL(social_links[social_LinksArr[i]]).hostname;
+                if(!hostname.includes(`${social_LinksArr[i]}.com`)&&social_LinksArr[i]!='website'){
+                    return res.status(403).json({error: `${social_LinksArr[i]} provide valid social link with http(s) included`});
+                }
+            }
+        }
+    } catch (error) {
+        return res.status(403).json({error: "You must provide full social links with http(s) included"});
+    }
+    let updateObj = {"personal_info.username": username,
+        "personal_info.bio": bio,
+        social_links
+    }
+    User.findOneAndUpdate({_id: req.user},updateObj,{
+        runValidators: true
+    })
+    .then(()=>{
+        return res.status(200).json({username})
+    })
+    .catch((err)=>{
+        if(err.code==11000){
+        return res.status(409).json({error: "User already taken"});
+        }
+        return res.status(500).json({error: err.message});
+    })
 
 })
 
@@ -480,31 +575,46 @@ app.post("/isLiked-by-user",verifyJWT,(req, res)=>{
 })
 app.post("/add-comment",verifyJWT,(req, res)=>{
     let user_id = req.user;
-    let { _id, comment,replying_to, blog_author } = req.body;
+    let { _id, comment,replying_to, blog_author,notification_id} = req.body;
     if(!comment.length){
         return res.status(403).json({error: "comment can't be empty"})
     }
     //creating a comment object
-    let commentObj = new Comment({
+    let commentObj ={
         blog_id: _id,
         blog_author,
         comment,
         commented_by: user_id,
-    })
-    commentObj.save().then(commentFile=>{
+    }
+    if(replying_to){
+        commentObj.parent = replying_to;
+        commentObj.isReply = true;
+    }
+    new Comment(commentObj).save().then(async commentFile=>{
         let {comment, commentedAt,children} = commentFile;
 
         Blog.findOneAndUpdate({_id},{$push:{"comments": commentFile._id},$inc: {
-            "activity.total_comments": 1},"activity.total_parent_comments": 1})
+            "activity.total_comments": 1},"activity.total_parent_comments":replying_to ? 0 : 1})
         .then(blog=>{
             console.log("new comment created");
         })
         let notificationObj = {
-            type: "comment",
+            type: replying_to ?"reply" : "comment",
             blog: _id,
             notification_for: blog_author,
             user: user_id,
             comment: commentFile._id
+        }
+        if(replying_to){
+            notificationObj.replied_on_comment = replying_to;
+
+            await Comment.findOneAndUpdate({_id:replying_to},{$push:{children: commentFile._id}})
+            .then(replyingToCommentDoc=> {notificationObj.notification_for = replyingToCommentDoc.commented_by})
+
+            if(notification_id){
+                Notification.findOneAndUpdate({_id: notification_id},{reply: commentFile._id})
+                .then(notification=> console.log("updated notification"))
+            }
         }
         new Notification(notificationObj).save()
         .then(notification => console.log("new notification created"))
@@ -537,6 +647,210 @@ app.post("/add-comment",verifyJWT,(req, res)=>{
             return res.status(500).json({error: err.message})
         })
     })
+
+    app.post("/get-replies",(req, res)=>{
+        let {_id,skip} = req.body;
+
+        let maxLimit = 5;
+
+        Comment.findOne({ _id})
+        .populate({
+            path:"children",
+            options : {
+                limit: maxLimit,
+                skip: skip,
+                sort: {commentedAt: -1}
+            },
+            populate: {
+                path: 'commented_by',
+                select: "personal_info.profile_img personal_info.username personal_info.fullname"
+            },
+            select: "-blog_id -updatedAt"
+        })
+        .select("children")
+        .then(doc=>{
+            return res.status(200).json({replies: doc.children})
+        })
+        .catch(err=>{
+            return res.status(500).json({error: err.message})
+        })
+    })
+
+const deleteComment = (_id) =>{
+    Comment.findOneAndDelete({_id})
+    .then(comment => {
+        if(comment.parent){
+            Comment.findOneAndUpdate({_id: comment.parent},{ $pull: {children: _id}})
+            .then(data=> {
+                console.log("reply deleted");
+            })
+            .catch(error => {
+                console.log(error.message);
+            })
+        }
+        Notification.findOneAndDelete({comment:_id})
+        .then(notification => console.log("comment notification deleted"))
+
+        Notification.findOneAndUpdate({reply: _id},{$unset: {reply: 1}})
+        .then(notification => console.log("reply notification deleted"))
+
+        Blog.findOneAndUpdate({_id: comment.blog_id},{$pull: {comments: _id},$inc: {"activity.total_comments":-1},"activity.total_parent_comments": comment.parent ? 0 : -1})
+        .then(blog=>{
+            if(comment.children.length){
+                comment.children.map(replies => deleteComment(replies));
+            }
+        })
+    })
+        .catch(err=>{
+            console.log(err.message);
+    })
+}
+app.post("/delete-comment",verifyJWT,(req, res)=>{
+    let user_id = req.user;
+    let {_id} = req.body;
+
+    Comment.findOne({_id})
+    .then(comment=>{
+        if(user_id == comment?.commented_by || user_id == comment.blog_author){
+            deleteComment(_id);
+            return res.status(200).json({status: 'done'})
+        }else{
+            return res.status(403).json({error: "You don't have permission to delete this comment"})
+        }
+    })
+})
+app.get("/new-notification",verifyJWT,(req, res)=>{
+
+    let user_id = req.user;
+
+    Notification.exists({notification_for: user_id, seen: false,user: {$ne: user_id}})
+    .then(result=>{
+        if(result){
+        return res.status(200).json({new_notification_available: true})
+        }else{
+            return res.status(200).json({new_notification_available: false})
+        }
+    })
+    .catch(err=>{
+        console.error(err.message);
+        return res.status(500).json({error: err.message})
+    })
+})
+
+app.post("/notifications",verifyJWT,(req, res)=>{
+    let user_id = req.user;
+
+    let {page, filter,deletedDocCount} = req.body;
+
+    let maxLimit = 10;
+    let findQuery = {notification_for: user_id, user:{ $ne: user_id}};
+    let skipDocs = (page-1)*maxLimit;
+
+    if(filter !="all"){
+        findQuery.type = filter;
+    }
+    if(deletedDocCount){
+        skipDocs -= deletedDocCount; 
+    }
+
+    Notification.find(findQuery)
+    .skip(skipDocs)
+    .limit(maxLimit)
+    .populate("blog","title blog_id")
+    .populate("user", "personal_info.profile_img personal_info.username personal_info.fullname")
+    .populate("comment","comment")
+    .populate("replied_on_comment", "comment")
+    .populate("reply","comment")
+    .sort({createdAt: -1})
+    .select("createdAt type seen reply")
+    .then(notifications=>{
+        Notification.updateMany(findQuery,{seen:true})
+        .skip(skipDocs)
+        .limit(maxLimit)
+        .then(()=>{
+            console.log("notifications marked as seen");
+        })
+        return res.status(200).json({notifications})
+    })
+    .catch(err=>{
+        console.error(err.message);
+        return res.status(500).json({error: err.message})
+    })
+
+})
+
+app.post("/all-notifications-count",verifyJWT,(req, res)=>{
+    let user_id = req.user;
+    let {filter} = req.body;
+
+    let findQuery = {notification_for: user_id, user:{ $ne: user_id}};
+    if(filter!="all"){
+        findQuery.type = filter;
+    }
+    Notification.countDocuments(findQuery)
+    .then(count=>{
+        return res.status(200).json({totalDocs: count})
+    })
+    .catch(err=>{
+        return res.status(500).json({error: err.message})
+    })
+})
+app.post("/user-written-blogs",verifyJWT,(req, res)=>{
+    let user_id = req.user;
+
+    let {page,draft,query,deletedDocCount} = req.body;
+    let maxLimit = 5;
+    let skipDocs = (page-1)*maxLimit;
+    if(deletedDocCount){
+        skipDocs -= deletedDocCount;
+    }
+    Blog.find({author: user_id,draft,title: new RegExp(query,'i')})
+    .skip(skipDocs)
+    .limit(maxLimit)
+    .sort({publishedAt: -1})
+    .select("title banner publishedAt des activity draft blog_id -_id")
+    .then(blogs=>{
+        return res.status(200).json({blogs})
+    })
+    .catch(err=>{
+        return res.status(500).json({error: err.message})
+    })
+})
+app.post("/user-written-blogs-count",verifyJWT,(req, res)=>{
+    let user_id = req.user;
+
+    let {draft, query} = req.body;
+    Blog.countDocuments({author: user_id, draft, title: new RegExp(query,'i')})
+    .then(count=>{
+        return res.status(200).json({totalDocs: count})
+    })
+    .catch(err=>{
+        console.log(err);
+        return res.status(500).json({error: err.message})
+    })
+})
+app.post("/delete-blog",verifyJWT,(req, res)=>{
+
+    let user_id = req.user;
+    let {blog_id} = req.body;
+    Blog.findOneAndDelete({blog_id})
+    .then(blog=>{
+        Notification.deleteMany({blog: blog._id})
+        .then((data)=>console.log("notifications deleted"))
+
+        Comment.deleteMany({blog_id: blog._id})
+        .then((data)=>console.log("comments deleted"))
+
+        User.findOneAndUpdate({_id: user_id},{$pull:{blog: blog._id},$inc: {"account_info.total_posts": -1}})
+        .then((user)=>console.log("blog deleted"))
+        
+        return res.status(200).json({status: 'done'})
+    })
+    .catch(err=>{
+        return res.status(500).json({error: err.message})
+    })
+
+})
 
 app.listen(PORT,()=>{
     console.log(`Server is running on port ${PORT}`);

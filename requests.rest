@@ -1,24 +1,8 @@
-#"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2OWFjMjg0Y2E5YWVmYTdlYWM3NTNhNyIsImlhdCI6MTcyMTQxODM3Mn0.vV54hPQxiLOPNZ7B7MQaZkCDaEWBC_Krq2Cxr748Slo"
-# POST http://localhost:3000/signup
-# Content-Type: application/json
-
-# {
-#     "fullname": "john",
-#     "email": "john2@example.com",
-#     "password": "Password123"
-# }
-
-# POST  http://localhost:3000/get-blog
-# Content-Type: application/json
-
-# {
-#     "blog_id" : "Leaving-on-a-Jet-PlaneMbFXBjgG8_WLooFbDEUkb"
-# }
-POST  http://localhost:3000/get-profile
+POST http://localhost:3000/user-written-blogs
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2OThhN2JmNmRkN2MzZmJjMmIxMDBhZSIsImlhdCI6MTcyMTczOTcwN30._1faWz_JrQa8eAoXWbGOVNVYVzncIE2hu-LuHwDARuQ
 Content-Type: application/json
 
 {
-    "username" : "mukul09457"
+    "page" : 1,
+    "draft" : false
 }
-
-
