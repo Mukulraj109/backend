@@ -16,6 +16,29 @@ import Notification from './Schema/Notification.js';
 import Comment from './Schema/Comment.js';
 import { populate } from 'dotenv';
 
+
+
+
+// Define the list of allowed origins
+const allowedOrigins = [
+    'https://frontend-6o3i.onrender.com'
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Check if the incoming request's origin is in the allowed origins
+    if (allowedOrigins.includes(origin) || !origin) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+};
+
+app.use(cors(corsOptions));
+
+
+
 const app = express();
 let PORT = 3000;
 admin.initializeApp({
@@ -25,7 +48,6 @@ let emailRegex = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/; // regex for e
 let passwordRegex = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; // regex for password
 
 app.use(express.json());
-app.use(cors())
 
 mongoose.connect(process.env.DB_LOCATION,{
     autoIndex: true
