@@ -16,6 +16,16 @@ import Notification from './Schema/Notification.js';
 import Comment from './Schema/Comment.js';
 import { populate } from 'dotenv';
 
+
+const corsOptions = {
+    origin: '*',
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    allowedHeaders: 'Content-Type,Authorization'
+};
+
+app.use(cors(corsOptions));
+
+
 const app = express();
 let PORT = 3000;
 admin.initializeApp({
