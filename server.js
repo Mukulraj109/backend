@@ -17,13 +17,8 @@ import Comment from './Schema/Comment.js';
 import { populate } from 'dotenv';
 
 const app = express();
-const corsOptions = {
-  origin: 'https://your-frontend-domain.com', // Replace with your frontend domain
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-  credentials: true, // Allow cookies to be sent with requests
-};
 
-app.use(cors(corsOptions));
+app.use(cors());
 
 let PORT = 3000;
 
