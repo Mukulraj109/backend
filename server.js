@@ -17,18 +17,13 @@ import Comment from './Schema/Comment.js';
 import { populate } from 'dotenv';
 
 const app = express();
-app.use(cors(corsOptions));
-const corsOptions = {
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type,Authorization'
-};
-
-
-
 
 
 let PORT = 3000;
+app.use(cors());
+
+
+
 admin.initializeApp({
     credential : admin.credential.cert(serviceAccountKey)
 })
