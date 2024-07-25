@@ -16,6 +16,7 @@ import Notification from './Schema/Notification.js';
 import Comment from './Schema/Comment.js';
 import { populate } from 'dotenv';
 
+const app = express();
 app.use(cors(corsOptions));
 const corsOptions = {
     origin: '*',
@@ -26,7 +27,7 @@ const corsOptions = {
 
 
 
-const app = express();
+
 let PORT = 3000;
 admin.initializeApp({
     credential : admin.credential.cert(serviceAccountKey)
