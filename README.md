@@ -51,18 +51,22 @@ The backend for ScribbleNest is a Node.js application built with Express.js and 
 3. **Create a \`.env\` file in the root directory and add the following environment variables:**
 
    \`\`\`env
-   DB_LOCATION=mongodb://localhost:27017/scribblenest
-   CLOUDINARY_CLOUD_NAME=your-cloud-name
-   CLOUDINARY_API_KEY=your-api-key
-   CLOUDINARY_API_SECRET=your-api-secret
-   SECRET_ACCESS_KEY=your-secret-key
+   DB_LOCATION=mongodb://localhost:27017/scribblenest,
+   
+   CLOUDINARY_CLOUD_NAME=your-cloud-name,
+   
+   CLOUDINARY_API_KEY=your-api-key,
+   
+   CLOUDINARY_API_SECRET=your-api-secret,
+   
+   SECRET_ACCESS_KEY=your-secret-key.
    \`\`\`
 
-4. **Add Firebase service account credentials:**
+5. **Add Firebase service account credentials:**
 
    Place your Firebase Admin SDK JSON file in the root directory and name it \`serviceAccountKey.json\`.
 
-5. **Start the server:**
+6. **Start the server:**
 
    \`\`\`bash
    npm start
