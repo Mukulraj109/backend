@@ -38,7 +38,7 @@ The backend for ScribbleNest is a Node.js application built with Express.js and 
 1. **Clone the repository:**
 
    \`\`\`bash
-   git clone https://github.com/Mukulraj109/frontend.git
+  https://github.com/Mukulraj109/backend.git
    cd frontend
    \`\`\`
 
